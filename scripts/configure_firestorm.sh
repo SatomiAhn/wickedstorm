@@ -361,11 +361,7 @@ fi
 
 
 if [ -z $CHANNEL ] ; then
-    if [ $TARGET_PLATFORM == "darwin" ] ; then
-        CHANNEL="private-`hostname -s` "
-    else
-        CHANNEL="private-`hostname`"
-    fi
+    CHANNEL="private"
 else
     CHANNEL=`echo $CHANNEL | sed -e "s/[^a-zA-Z0-9\-]*//g"` # strip out difficult characters from channel
 fi
