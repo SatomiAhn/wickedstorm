@@ -22,6 +22,7 @@
 #include "llviewermessage.h"
 
 #include "rlvinventory.h"
+#include "rlvhandler.h"
 
 #include "boost/algorithm/string.hpp"
 
@@ -57,6 +58,26 @@ public:
 // RlvInventory member functions
 //
 
+// Checked: 2010-03-19 (RLVa-1.2.0a) | Modified: RLVa-1.2.0a
+inline bool RlvInventory::isFoldedFolder(const LLInventoryCategory* pFolder, bool fCheckComposite)
+{
+	return
+	  // If legacy naming isn't enabled we can return early if the folder name doesn't start with a '.' (= the most common case)
+	  (pFolder) && ( (RlvSettings::getEnableLegacyNaming()) || (RLV_FOLDER_PREFIX_HIDDEN == pFolder->getName().at(0)) ) &&
+	  (
+		// .(<attachpt>) type folder
+		(0 != RlvAttachPtLookup::getAttachPointIndex(pFolder))
+		#ifdef RLV_EXTENSION_FLAG_NOSTRIP
+		// .(nostrip) folder
+		|| ( (pFolder) && (".(" RLV_FOLDER_FLAG_NOSTRIP ")" == pFolder->getName()) )
+		#endif // RLV_EXTENSION_FLAG_NOSTRIP
+		// Composite folder (if composite folders are enabled and we're asked to look for them)
+		#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
+		|| ( (fCheckComposite) && (RlvSettings::getEnableComposites()) &&
+		     (pFolder) && (RLV_FOLDER_PREFIX_HIDDEN == pFolder->getName().at(0)) && (gRlvHandler.isCompositeFolder(pFolder)) )
+		#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
+	  );
+}
 // Checked: 2011-03-28 (RLVa-1.3.0g) | Modified: RLVa-1.3.0g
 RlvInventory::RlvInventory()
 	: m_fFetchStarted(false), m_fFetchComplete(false)
@@ -801,8 +822,8 @@ bool RlvWearableItemCollector::onCollectFolder(const LLInventoryCategory* pFolde
 		#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
 		if ( (!RlvSettings::getEnableComposites()) ||							// ... if we're not checking composite folders
 			 (!gRlvHandler.isCompositeFolder(pFolder)) ||						// ... or if it's not a composite folder
-		     ((m_fAttach) && (gRlvHandler.canWearComposite(pFolder))) ||		// ... or if we're attaching and can attach it OR
-			 (!m_fAttach) && (gRlvHandler.canTakeOffComposite(pFolder)) )		// ... or if we're detaching and can detach it
+		     ((fAttach) && (gRlvHandler.canWearComposite(pFolder))) ||		// ... or if we're attaching and can attach it OR
+			 (!fAttach) && (gRlvHandler.canTakeOffComposite(pFolder)) )		// ... or if we're detaching and can detach it
 		#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
 		{
 			m_Wearable.push_front(pFolder->getUUID());
@@ -814,11 +835,11 @@ bool RlvWearableItemCollector::onCollectFolder(const LLInventoryCategory* pFolde
 	else if ( (RlvSettings::getEnableComposites()) &&
 			  (RLV_FOLDER_PREFIX_HIDDEN == strFolder[0]) &&						// Hidden folder that's a... 
 			  (gRlvHandler.isCompositeFolder(pFolder)) &&						// ... composite folder which we...
-		      ( ((m_fAttach) && (gRlvHandler.canWearComposite(pFolder))) ||		// ... are attaching and can attach OR
-			    (!m_fAttach) && (gRlvHandler.canTakeOffComposite(pFolder)) ) )	// ... are detaching and can detach
+		      ( ((fAttach) && (gRlvHandler.canWearComposite(pFolder))) ||		// ... are attaching and can attach OR
+			    (!fAttach) && (gRlvHandler.canTakeOffComposite(pFolder)) ) )	// ... are detaching and can detach
 	{
 		m_Wearable.push_front(pFolder->getUUID());
-		m_FoldingMap.insert(std::pair<LLUUID, LLUUID>(pFolder->getUUID(), idParent));
+		m_FoldingMap.insert(std::pair<LLUUID, LLUUID>(pFolder->getUUID(), pFolder->getParentUUID()));
 	}
 	#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
 

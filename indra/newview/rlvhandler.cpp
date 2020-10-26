@@ -1325,14 +1325,14 @@ bool RlvHandler::redirectChatOrEmote(const std::string& strUTF8Text) const
 	// Checked: 2009-12-18 (RLVa-1.1.0k) | Modified: RLVa-1.1.0i
 	bool RlvHandler::getCompositeInfo(const LLUUID& idItem, std::string* pstrName, LLViewerInventoryCategory** ppFolder) const
 	{
-/*
+
 		LLViewerInventoryCategory* pRlvRoot; LLViewerInventoryItem* pItem;
-		if ( (idItem.notNull()) && ((pRlvRoot = getSharedRoot()) != NULL) && 
+		if ( (idItem.notNull()) && ((pRlvRoot = RlvInventory::instance().getSharedRoot()) != NULL) && 
 			 (gInventory.isObjectDescendentOf(idItem, pRlvRoot->getUUID())) && ((pItem = gInventory.getItem(idItem)) != NULL) )
 		{
 			// We know it's an item in a folder under the shared root (we need its parent if it's a folded folder)
 			LLViewerInventoryCategory* pFolder = gInventory.getCategory(pItem->getParentUUID());
-			if (isFoldedFolder(pFolder, true, false))	// Don't check if the folder is a composite folder
+			if (RlvInventory::isFoldedFolder(pFolder, false))	// Don't check if the folder is a composite folder
 				pFolder = gInventory.getCategory(pFolder->getParentUUID());
 
 			if ( (pFolder) && (getCompositeInfo(pFolder, pstrName)) )
@@ -1342,7 +1342,7 @@ bool RlvHandler::redirectChatOrEmote(const std::string& strUTF8Text) const
 				return true;
 			}
 		}
-*/
+
 		return false;
 	}
 #endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
@@ -1388,48 +1388,51 @@ bool RlvHandler::redirectChatOrEmote(const std::string& strUTF8Text) const
 	// Checked: 2009-12-18 (RLVa-1.1.0k) | Modified: RLVa-1.1.0i
 	bool RlvHandler::canTakeOffComposite(const LLInventoryCategory* pFolder) const
 	{
+		LL_WARNS( "RLVaComposites" ) << "trivial checks for " << pFolder->getName() << LL_ENDL;
 		// Sanity check - if there's no folder or no avatar then there is nothing to take off
-		LLVOAvatarSelf* pAvatar = gAgent.getAvatarObject();
-		if ( (!pFolder) || (!pAvatar) )
+		if ( (!pFolder) || (!gAgentAvatarp) )
 			return false;
 		// Sanity check - if nothing is locked then we can definitely take it off
-		if ( (!gRlvAttachmentLocks.hasLockedAttachmentPoint(RLV_LOCK_REMOVE)) || 
+		if ( (!gRlvAttachmentLocks.hasLockedAttachmentPoint(RLV_LOCK_REMOVE)) && 
 			 (!gRlvWearableLocks.hasLockedWearableType(RLV_LOCK_REMOVE)) )
 		{
 			return true;
 		}
 
-/*
+		LL_WARNS( "RLVaComposites" ) << "end of trivial checks" << LL_ENDL;
+
 		LLInventoryModel::cat_array_t folders;
 		LLInventoryModel::item_array_t items;
-		RlvWearableItemCollector functor(pFolder->getUUID(), true, false);
+		RlvWearableItemCollector functor(pFolder, RlvForceWear::ACTION_REMOVE, RlvForceWear::FLAG_NONE);  // [SA] ACTION_REMOVE sounded more logical... but... seems it was a WEAR action
 		gInventory.collectDescendentsIf(pFolder->getUUID(), folders, items, FALSE, functor);
 
-		for (S32 idxItem = 0, cntItem = items.count(); idxItem < cntItem; idxItem++)
+		for (S32 idxItem = 0, cntItem = items.size(); idxItem < cntItem; idxItem++)
 		{
-			const LLViewerInventoryItem* pItem = items.get(idxItem);
+			const LLViewerInventoryItem* pItem = items.at(idxItem);
 			switch (pItem->getType())
 			{
 				case LLAssetType::AT_BODYPART:
 				case LLAssetType::AT_CLOTHING:
 					{
-						LLWearable* pWearable = gAgent.getWearableFromWearableItem(pItem->getUUID());
-						if ( (pWearable) && (!isRemovable(pWearable->getType())) )
-							return false;	// If one wearable in the folder is non-removeable then the entire folder should be
+		LL_WARNS( "RLVaComposites" ) << "check wearable: " << pItem->getName() << LL_ENDL;
+						if ( gAgentWearables.getWearableFromItemID(pItem->getLinkedUUID())
+						  && !gRlvWearableLocks.canRemove(pItem) )
+						return false;	// If one wearable in the folder is non-removeable then the entire folder should be
 					}
 					break;
 				case LLAssetType::AT_OBJECT:
 					{
-						LLViewerObject* pObj = pAvatar->getWornAttachment(pItem->getUUID());
-						if ( (pObj != NULL) && (isLockedAttachment(pObj, RLV_LOCK_REMOVE)) )
-							return false;	// If one attachment in the folder is non-detachable then the entire folder should be
+		LL_WARNS( "RLVaComposites" ) << "check attachment: " << pItem->getName() << LL_ENDL;
+						if ( gAgentAvatarp->getWornAttachment(pItem->getLinkedUUID()) 
+						  && !gRlvAttachmentLocks.canDetach(pItem) )
+						return false;	// If one attachment in the folder is non-detachable then the entire folder should be
 					}
 					break;
 				default:
 					break;
 			}
 		}
-*/
+
 		return true;
 	}
 
@@ -1437,22 +1440,21 @@ bool RlvHandler::redirectChatOrEmote(const std::string& strUTF8Text) const
 	bool RlvHandler::canWearComposite(const LLInventoryCategory* pFolder) const
 	{
 		// Sanity check - if there's no folder or no avatar then there is nothing to wear
-		LLVOAvatar* pAvatar = gAgent.getAvatarObject();
-		if ( (!pFolder) || (!pAvatar) )
+		if ( (!pFolder) || (!gAgentAvatarp) )
 			return false;
 		// Sanity check - if nothing is locked then we can definitely wear it
-		if ( (!gRlvAttachmentLocks.hasLockedAttachmentPoint(RLV_LOCK_ANY)) || (!gRlvWearableLocks.hacLockedWearableType(RLV_LOCK_ANY)) )
+		if ( (!gRlvAttachmentLocks.hasLockedAttachmentPoint(RLV_LOCK_ANY)) || (!gRlvWearableLocks.hasLockedWearableType(RLV_LOCK_ANY)) )
 			return true;
 
-/*
+
 		LLInventoryModel::cat_array_t folders;
 		LLInventoryModel::item_array_t items;
-		RlvWearableItemCollector functor(pFolder->getUUID(), true, false);
+		RlvWearableItemCollector functor(pFolder, RlvForceWear::ACTION_WEAR_ADD, RlvForceWear::FLAG_NONE);  //maybe other case needed for ACTION_WEAR_REPLACE
 		gInventory.collectDescendentsIf(pFolder->getUUID(), folders, items, FALSE, functor);
 
-		for (S32 idxItem = 0, cntItem = items.count(); idxItem < cntItem; idxItem++)
+		for (S32 idxItem = 0, cntItem = items.size(); idxItem < cntItem; idxItem++)
 		{
-			LLViewerInventoryItem* pItem = items.get(idxItem);
+			LLViewerInventoryItem* pItem = items.at(idxItem);
 
 			if (RlvForceWear::isWearingItem(pItem))
 				continue; // Don't examine any items we're already wearing
@@ -1466,37 +1468,22 @@ bool RlvHandler::redirectChatOrEmote(const std::string& strUTF8Text) const
 				case LLAssetType::AT_BODYPART:
 				case LLAssetType::AT_CLOTHING:
 					{
-						// NOTE: without its asset we don't know what type the wearable is so we need to look at the item's flags instead
-						LLWearableType::EType wtType = (LLWearableType::EType)(pItem->getFlags() & LLInventoryItem::II_FLAGS_WEARABLES_MASK);
-						LLViewerInventoryCategory* pFolder;
-						if ( (!isWearable(wtType)) ||
-							 ( (gAgent.getWearable(wtType)) && (!isRemovable(wtType)) ) || 
-							 ( (gRlvHandler.getCompositeInfo(gAgent.getWearableItem(wtType), NULL, &pFolder)) &&
-							   (pFolder->getUUID() != pItem->getParentUUID()) && (!gRlvHandler.canTakeOffComposite(pFolder)) ) )
-						{
-							return false;
-						}
+						if ( !gRlvWearableLocks.canWear(pItem) )
+						return false;	// If one wearable in the folder is non-wearable then the entire folder should be
+						// we don't bother about checking other worn wearables on that spot: in the worst case it can be added over
 					}
 					break;
 				case LLAssetType::AT_OBJECT:
 					{
-						// If we made it here then *something* is add/remove locked so we absolutely need to know its attachment point
-						LLViewerJointAttachment* pAttachPt = getAttachPoint(pItem, true); 
-						LLViewerInventoryCategory* pFolder;
-						if ( (!pAttachPt) || (isLockedAttachment(pAttachPt, RLV_LOCK_ADD)) ||
-							 ( (pAttachPt->getObject()) && (isLockedAttachment(pAttachPt, RLV_LOCK_REMOVE)) ) ||
-							 ( (gRlvHandler.getCompositeInfo(pAttachPt->getItemID(), NULL, &pFolder)) &&
-							   (pFolder->getUUID() != pItem->getParentUUID()) && (!gRlvHandler.canTakeOffComposite(pFolder)) ) )
-						{
-							return false;
-						}
+						if ( !gRlvAttachmentLocks.canAttach(pItem) )
+						return false;	// If one attachment in the folder is non-attachable then the entire folder should be
 					}
 					break;
 				default:
 					break;
 			}
 		}
-*/
+
 		return true;
 	}
 #endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS

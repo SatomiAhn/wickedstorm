@@ -1210,26 +1210,7 @@ void RlvForceWear::forceFolder(const LLViewerInventoryCategory* pFolder, EWearAc
 					{
 						if (!isAddAttachment(pRlvItem))
 						{
-							#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-							// We still need to check whether we're about to replace a currently worn composite item
-							// (which we're not if we're just reattaching an attachment we're already wearing)
-							LLViewerInventoryCategory* pCompositeFolder = NULL;
-							if ( (pAttachPt->getObject()) && (RlvSettings::getEnableComposites()) && 
-								 (pAttachPt->getItemID() != pItem->getUUID()) &&
-								 (gRlvHandler.getCompositeInfo(pAttachPt->getItemID(), NULL, &pCompositeFolder)) )
-							{
-								// If we can't take off the composite folder this item would replace then don't allow it to get attached
-								if (gRlvHandler.canTakeOffComposite(pCompositeFolder))
-								{
-									forceFolder(pCompositeFolder, ACTION_DETACH, FLAG_DEFAULT);
-									addAttachment(pRlvItem);
-								}
-							}
-							else
-							#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-							{
-								addAttachment(pRlvItem, eCurAction);
-							}
+							addAttachment(pRlvItem, eCurAction);
 						}
 					}
 				}
@@ -1271,7 +1252,23 @@ bool RlvForceWear::isForceDetachable(const LLViewerObject* pAttachObj, bool fChe
 	//   - it's not the LSL bridge, which should never be affected by RLV
 	//</FS:TS> FIRE-4453
 	#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-	LLViewerInventoryCategory* pFolder = NULL;
+	BOOL noLockedComposite = TRUE;
+	if ( fCheckComposite && RlvSettings::getEnableComposites() && (pAttachObj) && (pAttachObj->isAttachment()))
+	{
+		LLViewerInventoryCategory* pFolder = NULL;
+		if (!gRlvHandler.getCompositeInfo(pAttachObj->getAttachmentItemID(), NULL, &pFolder)
+					|| (noLockedComposite = gRlvHandler.canTakeOffComposite(pFolder)))
+		{
+			// iterate folders having a link to that item and check whether they are composite and can be detached
+			LLInventoryModel::item_array_t linkedItems = gInventory.collectLinkedItems(pAttachObj->getAttachmentItemID() , RlvInventory::instance().getSharedRoot()->getUUID());
+			LL_WARNS( "RLVaComposites" ) << "RlvForceWear::isForceDetachable: " << linkedItems.size() << " links found" << LL_ENDL;
+			LLInventoryModel::item_array_t::iterator itItems = linkedItems.begin();
+			while ( itItems != linkedItems.end()
+				&& (!gRlvHandler.getCompositeInfo((*itItems++)->getUUID(), NULL, &pFolder)
+					|| (noLockedComposite = gRlvHandler.canTakeOffComposite(pFolder))));
+			LL_WARNS( "RLVaComposites" ) << "RlvForceWear::isForceDetachable: " << (noLockedComposite?"yes":"no") << LL_ENDL;
+		}
+	}
 	#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
 	return 
 	  (
@@ -1283,8 +1280,7 @@ bool RlvForceWear::isForceDetachable(const LLViewerObject* pAttachObj, bool fChe
 		&& (pAttachObj->getID() != FSLSLBridge::instance().getAttachedID())
 		//</FS:TS> FIRE-4453
 		#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-		&& ( (!fCheckComposite) || (!RlvSettings::getEnableComposites()) || 
-	         (!gRlvHandler.getCompositeInfo(pAttachPt->getItemID(), NULL, &pFolder)) || (gRlvHandler.canTakeOffComposite(pFolder)) )
+		&& noLockedComposite
 		#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
 	  );
 }
@@ -1312,13 +1308,28 @@ void RlvForceWear::forceDetach(const LLViewerObject* pAttachObj)
 	if (isForceDetachable(pAttachObj))
 	{
 		#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-		LLViewerInventoryCategory* pFolder = NULL;
-		if ( (RlvSettings::getEnableComposites()) && 
-			 (gRlvHandler.getCompositeInfo(pAttachPt->getItemID(), NULL, &pFolder)) )
-		{
-			// Attachment belongs to a composite folder so detach the entire folder (if we can take it off)
-			if (gRlvHandler.canTakeOffComposite(pFolder))
-				forceFolder(pFolder, ACTION_DETACH, FLAG_DEFAULT);
+		if ( RlvSettings::getEnableComposites() )
+		{ 
+			LLViewerInventoryCategory* pFolder = NULL;
+			if ( gRlvHandler.getCompositeInfo(pAttachObj->getAttachmentItemID(), NULL, &pFolder) && gRlvHandler.canTakeOffComposite(pFolder))
+				  forceFolder(pFolder, ACTION_REMOVE, FLAG_DEFAULT);
+			// iterate folders having a link to that item and check whether they are composite
+			LLInventoryModel::item_array_t linkedItems = gInventory.collectLinkedItems(pAttachObj->getAttachmentItemID() , RlvInventory::instance().getSharedRoot()->getUUID());
+			LL_WARNS( "RLVaComposites" ) << "RlvForceWear::forceDetach: " << linkedItems.size() << " links found" << LL_ENDL;
+			for (LLInventoryModel::item_array_t::iterator itItems = linkedItems.begin(); itItems != linkedItems.end(); itItems++)
+			{
+				LL_WARNS( "RLVaComposites" ) << "RlvForceWear::forceDetach: found a link, trying" << LL_ENDL;
+			  
+				if ( gRlvHandler.getCompositeInfo((*itItems)->getUUID(), NULL, &pFolder) && gRlvHandler.canTakeOffComposite(pFolder)){
+					LL_WARNS( "RLVaComposites" ) << "RlvForceWear::forceDetach: before detaching one folder" << LL_ENDL;
+					forceFolder(pFolder, ACTION_REMOVE, FLAG_DEFAULT);
+					LL_WARNS( "RLVaComposites" ) << "RlvForceWear::forceDetach: after detaching one folder" << LL_ENDL;
+				  
+				}
+				else LL_WARNS( "RLVaComposites" ) << "RlvForceWear::forceDetach: nothing to detach wrt this link" << LL_ENDL;
+				
+			}
+			remAttachment(pAttachObj); // in every case (the object could be in no composite)
 		}
 		else
 		#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
@@ -1347,7 +1358,23 @@ bool RlvForceWear::isForceRemovable(const LLViewerWearable* pWearable, bool fChe
 	//   - it's strippable
 	//   - composite folders are disabled *or* it isn't part of a composite folder that has at least one item locked
 	#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-	LLViewerInventoryCategory* pFolder = NULL;
+	BOOL noLockedComposite = TRUE;
+	if ( fCheckComposite && RlvSettings::getEnableComposites() && (pWearable) && (LLAssetType::AT_CLOTHING == pWearable->getAssetType()))
+	{
+		LLViewerInventoryCategory* pFolder = NULL;
+		if (!gRlvHandler.getCompositeInfo(pWearable->getItemID(), NULL, &pFolder)
+					|| (noLockedComposite = gRlvHandler.canTakeOffComposite(pFolder)))
+		{
+			// iterate folders having a link to that item and check whether they are composite and can be removed
+			LLInventoryModel::item_array_t linkedItems = gInventory.collectLinkedItems(pWearable->getItemID(), RlvInventory::instance().getSharedRoot()->getUUID());
+			LL_WARNS( "RLVaComposites" ) << "RlvForceWear::isForceRemovable: " << linkedItems.size() << " links found" << LL_ENDL;
+			LLInventoryModel::item_array_t::iterator itItems = linkedItems.begin();
+			while ( itItems != linkedItems.end()
+				&& (!gRlvHandler.getCompositeInfo((*itItems++)->getUUID(), NULL, &pFolder)
+					|| (noLockedComposite = gRlvHandler.canTakeOffComposite(pFolder))));
+			LL_WARNS( "RLVaComposites" ) << "RlvForceWear::isForceRemovable: " << (noLockedComposite?"yes":"no") << LL_ENDL;
+		}
+	}
 	#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
 	return 
 	  (
@@ -1356,8 +1383,7 @@ bool RlvForceWear::isForceRemovable(const LLViewerWearable* pWearable, bool fChe
 		                         : !gRlvWearableLocks.isLockedWearableExcept(pWearable, idExcept) )
 		&& (isStrippable(pWearable->getItemID()))
 		#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-		&& ( (!fCheckComposite) || (!RlvSettings::getEnableComposites()) || 
-		     (!gRlvHandler.getCompositeInfo(pWearable->getItemID(), NULL, &pFolder)) || (gRlvHandler.canTakeOffComposite(pFolder)) )
+		&& noLockedComposite
 		#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
 	  );
 }
@@ -1382,17 +1408,26 @@ void RlvForceWear::forceRemove(const LLViewerWearable* pWearable)
 	if (isForceRemovable(pWearable))
 	{
 		#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-		LLViewerInventoryCategory* pFolder = NULL;
-		if ( (RlvSettings::getEnableComposites()) && 
-			 (gRlvHandler.getCompositeInfo(gAgent.getWearableItem(wtType), NULL, &pFolder)) )
-		{
-			// Wearable belongs to a composite folder so detach the entire folder (if we can take it off)
-			if (gRlvHandler.canTakeOffComposite(pFolder))
-				forceFolder(pFolder, ACTION_DETACH, FLAG_DEFAULT);
+		if ( RlvSettings::getEnableComposites() )
+		{LL_WARNS( "RLVaComposites" ) << "RlvForceRemove::forceDetach: trying" << LL_ENDL;
+			LLViewerInventoryCategory* pFolder = NULL;
+			if ( gRlvHandler.getCompositeInfo(pWearable->getItemID(), NULL, &pFolder) && gRlvHandler.canTakeOffComposite(pFolder))
+				  forceFolder(pFolder, ACTION_REMOVE, FLAG_DEFAULT);
+			// iterate folders having a link to that item and check whether they are composite
+			LLInventoryModel::item_array_t linkedItems = gInventory.collectLinkedItems(pWearable->getItemID(), RlvInventory::instance().getSharedRoot()->getUUID());
+			LL_WARNS( "RLVaComposites" ) << "RlvForceWear::forceRemove: " << linkedItems.size() << " links found" << LL_ENDL;
+			for (LLInventoryModel::item_array_t::iterator itItems = linkedItems.begin(); itItems != linkedItems.end(); itItems++)
+			{LL_WARNS( "RLVaComposites" ) << "RlvForceRemove::forceDetach: found a link, check it"<< LL_ENDL;
+				// Wearable belongs to a composite folder so detach the entire folder (if we can take it off)
+				if ( gRlvHandler.getCompositeInfo((*itItems)->getUUID(), NULL, &pFolder) && gRlvHandler.canTakeOffComposite(pFolder))
+				{	forceFolder(pFolder, ACTION_REMOVE, FLAG_DEFAULT);
+							  LL_WARNS( "RLVaComposites" ) << "RlvForceRemove::forceDetach: detaching one folder" << LL_ENDL;}
+			}
+			remWearable(pWearable); // and in every case
 		}
 		else
 		#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-		{
+		{LL_WARNS( "RLVaComposites" ) << "RlvForceWear::forceRemove: composites disabled" << LL_ENDL;
 			remWearable(pWearable);
 		}
 	}
@@ -1469,7 +1504,31 @@ void RlvForceWear::addAttachment(const LLViewerInventoryItem* pItem, EWearAction
 		// Replace all pending attachments on this attachment point with the specified item (don't clear if it's the default attach point)
 		addattachments_map_t::iterator itAddAttachments = m_addAttachments.find(idxAttachPt | ATTACHMENT_ADD);
 		if ( (0 != idxAttachPt) && (itAddAttachments != m_addAttachments.end()) )
+		{
+			#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
+			// We still need to check whether we're about to replace a currently worn composite item
+			// (which we're not if we're just reattaching an attachment we're already wearing)
+			if (RlvSettings::getEnableComposites())
+			{
+				LLInventoryModel::item_array_t::iterator itItems = itAddAttachments->second.begin();
+				for (; itItems != itAddAttachments->second.end(); itItems++)
+				{
+					LLViewerInventoryCategory* pFolder = NULL;
+					LLInventoryModel::item_array_t linkedItems = gInventory.collectLinkedItems((*itItems)->getLinkedUUID() , RlvInventory::instance().getSharedRoot()->getUUID());
+					LLInventoryModel::item_array_t::iterator itLinkedItems = linkedItems.begin();
+					bool noLockedComposite = true;
+					while ( itLinkedItems != linkedItems.end()
+						&& (!gRlvHandler.getCompositeInfo((*itLinkedItems++)->getUUID(), NULL, &pFolder)
+							|| (noLockedComposite = gRlvHandler.canTakeOffComposite(pFolder))));
+					if (noLockedComposite) itAddAttachments->second.erase(itItems);
+				}
+			  
+			}
+			else itAddAttachments->second.clear();
+			#else  // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
 			itAddAttachments->second.clear();
+			#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
+		}
 
 		itAddAttachments = m_addAttachments.find(idxAttachPt);
 		if (itAddAttachments == m_addAttachments.end())

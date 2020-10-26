@@ -21,6 +21,7 @@
 #endif // CATZNIP_STRINGVIE
 
 // ============================================================================
+	#define RLV_EXPERIMENTAL_COMPOSITEFOLDERS
 // Defines
 //
 

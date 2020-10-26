@@ -124,7 +124,7 @@ protected:
 	static bool onChangedSettingBOOL(const LLSD& sdValue, bool* pfSetting);
 
 	#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-	static BOOL s_fCompositeFolders;
+	static bool s_fCompositeFolders;
 	#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
 
 	/*
