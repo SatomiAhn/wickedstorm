@@ -1283,10 +1283,10 @@
       <key>Value</key>
       <boolean>0</boolean>
     </map>
-    <key>RLVaEnableCompositeFolders</key>
+    <key>RLVaEnableComposites</key>
     <map>
       <key>Comment</key>
-      <string>Enables composite folders for shared inventory</string>
+      <string>Enables using folders in shared inventory as composite wearables. Such folder should have a name starting with [ and ending with ].</string>
       <key>Persist</key>
       <integer>1</integer>
       <key>Type</key>
