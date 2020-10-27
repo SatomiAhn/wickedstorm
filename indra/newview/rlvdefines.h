@@ -21,6 +21,7 @@
 #endif // CATZNIP_STRINGVIE
 
 // ============================================================================
+	#define RLV_EXPERIMENTAL_COMPOSITEFOLDERS
 // Defines
 //
 
@@ -230,8 +231,8 @@ enum ERlvBehaviour {
 	RLV_BHVR_SETCAM_TEXTURES,		// Replaces all textures with the specified texture (or the default unrezzed one)
 	RLV_BHVR_SETCAM_UNLOCK,			// Forces the camera focus to the user's avatar
 	// Camera (behaviours - deprecated)
-	RLV_BHVR_CAMZOOMMIN,			// Enforces a minimum - vertical - FOV angle of 60° / multiplier
-	RLV_BHVR_CAMZOOMMAX,			// Enforces a maximum - vertical - FOV angle of 60° / multiplier
+	RLV_BHVR_CAMZOOMMIN,			// Enforces a minimum - vertical - FOV angle of 60ï¿½ / multiplier
+	RLV_BHVR_CAMZOOMMAX,			// Enforces a maximum - vertical - FOV angle of 60ï¿½ / multiplier
 	// Camera (reply)
 	RLV_BHVR_GETCAM_AVDIST,			// Returns the current minimum distance between the camera and the user's avatar
 	RLV_BHVR_GETCAM_AVDISTMIN,		// Returns the active (if any) minimum distance between the camera and the user's avatar
@@ -405,6 +406,7 @@ namespace RlvSettingNames
 	constexpr const char WearReplacePrefix[] = "RestrainedLoveReplaceWhenFolderBeginsWith";
 
 	constexpr const char DebugHideUnsetDup[] = "RLVaDebugHideUnsetDuplicate";
+	constexpr const char EnableComposites[] = "RLVaEnableComposites";
 	constexpr const char EnableIMQuery[] = "RLVaEnableIMQuery";
 	constexpr const char EnableLegacyNaming[] = "RLVaEnableLegacyNaming";
 	constexpr const char EnableSharedWear[] = "RLVaEnableSharedWear";

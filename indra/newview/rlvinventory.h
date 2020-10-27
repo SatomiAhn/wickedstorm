@@ -303,25 +303,6 @@ inline std::string RlvInventory::getSharedPath(const LLUUID& idFolder) const
 	return getSharedPath(gInventory.getCategory(idFolder));
 }
 
-// Checked: 2010-03-19 (RLVa-1.2.0a) | Modified: RLVa-1.2.0a
-inline bool RlvInventory::isFoldedFolder(const LLInventoryCategory* pFolder, bool fCheckComposite)
-{
-	return
-	  // If legacy naming isn't enabled we can return early if the folder name doesn't start with a '.' (= the most common case)
-	  (pFolder) && ( (RlvSettings::getEnableLegacyNaming()) || (RLV_FOLDER_PREFIX_HIDDEN == pFolder->getName().at(0)) ) &&
-	  (
-		// .(<attachpt>) type folder
-		(0 != RlvAttachPtLookup::getAttachPointIndex(pFolder))
-		// .(nostrip) folder
-		|| ( (pFolder) && (".(" RLV_FOLDER_FLAG_NOSTRIP ")" == pFolder->getName()) )
-		// Composite folder (if composite folders are enabled and we're asked to look for them)
-		#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-		|| ( (fCheckComposite) && (RlvSettings::getEnableComposites()) &&
-		     (pFolder) && (RLV_FOLDER_PREFIX_HIDDEN == pFolder->getName().at(0)) && (isCompositeFolder(pFolder)) )
-		#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-	  );
-}
-
 // Checked: 2010-08-29 (RLVa-1.2.0c) | Added: RLVa-1.2.0c
 inline bool RlvInventory::isSharedFolder(const LLUUID& idFolder)
 {

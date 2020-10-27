@@ -2369,6 +2369,16 @@
         </menu_item_check>
         <menu_item_separator/>
       	<menu_item_check
+      	 label="Enable Composite Wearables"
+      	 name="Enable Composite Wearables">
+          <menu_item_check.on_check
+           function="CheckControl"
+           parameter="RLVaEnableComposites" />
+          <menu_item_check.on_click
+           function="ToggleControl"
+           parameter="RLVaEnableComposites" />
+      	</menu_item_check>
+      	<menu_item_check
       	 label="Enable Legacy Naming"
       	 name="Enable Legacy Naming">
           <menu_item_check.on_check

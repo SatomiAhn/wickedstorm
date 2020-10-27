@@ -107,9 +107,9 @@ void RlvSettings::initClass()
 			gSavedSettings.getControl(RlvSettingNames::EnableTempAttach)->getSignal()->connect(boost::bind(&onChangedSettingBOOL, _2, &s_fTempAttach));
 
 		#ifdef RLV_EXPERIMENTAL_COMPOSITEFOLDERS
-		s_fCompositeFolders = rlvGetSetting<bool>(RLV_SETTING_ENABLECOMPOSITES, false);
-		if (gSavedSettings.controlExists(RLV_SETTING_ENABLECOMPOSITES))
-			gSavedSettings.getControl(RLV_SETTING_ENABLECOMPOSITES)->getSignal()->connect(boost::bind(&onChangedSettingBOOL, _2, &s_fCompositeFolders));
+		s_fCompositeFolders = rlvGetSetting<bool>(RlvSettingNames::EnableComposites, false);
+		if (gSavedSettings.controlExists(RlvSettingNames::EnableComposites))
+			gSavedSettings.getControl(RlvSettingNames::EnableComposites)->getSignal()->connect(boost::bind(&onChangedSettingBOOL, _2, &s_fCompositeFolders));
 		#endif // RLV_EXPERIMENTAL_COMPOSITEFOLDERS
 
 		s_fLegacyNaming = rlvGetSetting<bool>(RlvSettingNames::EnableLegacyNaming, true);
